@@ -173,7 +173,7 @@ const logoutUser = asyncHandler(async (req,res) => {
             }
         },
         {
-            new: true  // this gives a new response which willl return a true value i.e the refresh token will give a undefined value. If this field is not written there can be a chance of getting the refresh token again.
+            new: true  // this gives a new response which will return a true value i.e the refresh token will give a undefined value. If this field is not written there can be a chance of getting the refresh token again.
         }
     )
     const options = {
@@ -232,9 +232,162 @@ const refreshAccessToken = asyncHandler(async (req,res) => {
         throw new ApiError(401,error?.message || "Invalid refresh token")
     }
 })
+
+const changeCurrentPassword = asyncHandler(async(req,res) => {
+    const {oldPassword, newPassword} = req.body
+
+    const user = await User.findById(req.user?._id)
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+    if(!isPasswordCorrect) {
+        throw new ApiError(400,"Invalid password")
+    }
+
+    user.password = newPassword
+    await user.save({validateBeforeSave: false})
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200,{},"Password changed successfully")
+    )
+})
+
+const getCurrentUser = asyncHandler(async(req,res) => {
+    return res
+    .status(200)
+    .json(200,req.user,"Current user fetched successfully")
+})
+
+const updateAccountDetails = asyncHandler(async(req,res) => {
+    const {fullName, email} = req.body
+    if(!fullName || !email) {
+        throw new ApiError(400,"All fields are required")
+    }
+
+    const user = User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                fullName: fullName,
+                email: email
+            }
+        },
+        {new:true}
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200,user,"Account details updated successfully")
+    )
+})
+
+const updateUserAvatar = asyncHandler(async(req,res) => {
+    const avatarlocalPath = req.file?.path
+
+    if(!avatarlocalPath) {
+        throw new ApiError(400,"Avatar file is missing")
+    }
+
+    const avatar = await uploadOnCloudinary(avatarlocalPath)
+
+    if(!avatar.url) {
+        throw new ApiError(400,"Error while uploading on avatar")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{
+                avatar: avatar.url
+            }
+        },
+        {new: true}
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(200,user,"Avatar updated successfully")
+})
+
+const updateUsercoverImage = asyncHandler(async(req,res) => {
+    const coverImagelocalPath = req.file?.path
+
+    if(!coverImagelocalPath) {
+        throw new ApiError(400,"cover image file is missing")
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImagelocalPath)
+
+    if(!coverImage.url) {
+        throw new ApiError(400,"Error while uploading on cover image")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{
+                coverImage: coverImage.url
+            }
+        },
+        {new: true}
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(200,user,"cover image updated successfully")
+})
 export {
     registerUser,
     loginUser,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetails,
+    updateUserAvatar,
+    updateUsercoverImage
 }
+
+/*
+Scenario: Movie Streaming App
+Characters: User: Alice
+            Client: Movie Streaming App (Frontend)
+            Server: Movie Streaming Backend (API)
+Tokens: Access Token: Short-lived (e.g., 15 minutes) and used to access protected resources like Alice's watchlist or her movie recommendations.
+        Refresh Token: Long-lived (e.g., 7 days) and used to obtain new access tokens when the access token expires.
+
+Flow of Access and Refresh Tokens :-
+1. Login: Initial Token Generation
+    -> Alice logs into the app by providing her username and password.
+    -> The server validates her credentials and generates:
+    -> An access token (valid for 15 minutes).
+    -> A refresh token (valid for 7 days).
+
+2. Making Requests with the Access Token
+    -> Alice wants to view her personalized movie recommendations.
+    -> The app sends a request to the server with the access token in the header.
+    -> The server verifies the access token and responds with Alice's movie recommendations.
+
+3. Access Token Expiry
+    -> After 15 minutes, the access token expires.
+    -> Alice tries to add a movie to her watchlist. The request fails because the access token is no longer valid.
+
+4. Using the Refresh Token
+    -> Instead of asking Alice to log in again, the app sends the refresh token to the server to get a new access token.
+    -> The server:
+           .Verifies the refresh token.
+           .Issues a new access token (valid for 15 minutes).
+           .Rotates the refresh token (issues a new one).
+
+5. Continuing the Session
+    -> The app stores the new tokens and retries the failed request (to add the movie to Alice's watchlist).
+    -> Alice’s session continues seamlessly without needing to log in again.
+
+6. Refresh Token Expiry
+    -> After 7 days, the refresh token also expires.
+    -> If Alice tries to use an expired refresh token:
+        . The server rejects it, and Alice is logged out.
+        . She needs to log in again to get new tokens.
+*/

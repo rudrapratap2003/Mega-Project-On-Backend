@@ -169,8 +169,8 @@ const logoutUser = asyncHandler(async (req,res) => {
     await User.findByIdAndUpdate(
         req.user._id,
         {
-            $set: {
-                refreshToken: undefined
+            $unset: {
+                refreshToken: 1
             }
         },
         {
@@ -225,7 +225,7 @@ const refreshAccessToken = asyncHandler(async (req,res) => {
         .json(
             new ApiResponse(
                 200,
-                {accessToken, refreshToken: newrefreshToken},
+                {accessToken,newrefreshToken},
                 "Access token refreshed"
             )
         )
@@ -257,7 +257,9 @@ const changeCurrentPassword = asyncHandler(async(req,res) => {
 const getCurrentUser = asyncHandler(async(req,res) => {
     return res
     .status(200)
-    .json(200,req.user,"Current user fetched successfully")
+    .json(
+        new ApiResponse(200,req.user,"Current user fetched successfully")
+    )
 })
 
 const updateAccountDetails = asyncHandler(async(req,res) => {
@@ -266,7 +268,7 @@ const updateAccountDetails = asyncHandler(async(req,res) => {
         throw new ApiError(400,"All fields are required")
     }
 
-    const user = User.findByIdAndUpdate(
+    const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
             $set: {
@@ -275,7 +277,7 @@ const updateAccountDetails = asyncHandler(async(req,res) => {
             }
         },
         {new:true}
-    ).select("-password")
+    ).select("-password -refreshToken")
 
     return res
     .status(200)
@@ -428,7 +430,7 @@ const getWatchHistory = asyncHandler(async(req,res) => {
     const user = await User.aggregate([
         {
             $match: {
-                _id: new mongoose.Types.ObjectId(req.user._id)
+                _id: new mongoose.Types.ObjectId(req.user?._id)
             }
         },
         {
@@ -478,6 +480,7 @@ const getWatchHistory = asyncHandler(async(req,res) => {
         )
     )
 })
+
 export {
     registerUser,
     loginUser,

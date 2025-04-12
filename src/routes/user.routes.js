@@ -29,6 +29,7 @@ router.route("/register").post(
     ]),
     registerUser) // http://localhost:8000/api/v1/users/register
 
+    
 router.route("/login").post(loginUser)
 
 //secured routes
